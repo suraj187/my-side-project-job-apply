@@ -28,6 +28,10 @@ def _cmd_run(args) -> None:
     for j in result.new_jobs[:20]:
         print(f"  [{j.score:3d}] {j.title} — {j.company}  ({j.workplace or '?'})")
     print(f"Digest: {result.digest_path}")
+    if args.notify:
+        from .notify import notify_run
+        fired = notify_run(result)
+        print(f"Notified via: {', '.join(fired) or 'none (channels unavailable)'}")
 
 
 def _cmd_list(args) -> None:
@@ -52,6 +56,8 @@ def main(argv=None) -> None:
     pr = sub.add_parser("run", help="fetch, rank, and store jobs")
     pr.add_argument("--dry-run", action="store_true", help="use offline fixtures")
     pr.add_argument("--digest-dir", default="digests")
+    pr.add_argument("--notify", action="store_true",
+                    help="send desktop ping + email (if SMTP_* env vars set)")
     pr.set_defaults(func=_cmd_run)
 
     pl = sub.add_parser("list", help="list stored jobs")

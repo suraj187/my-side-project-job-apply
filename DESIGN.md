@@ -1,123 +1,150 @@
 # JobPilot — Design
 
-A personal job-search assistant, built as **two independent tools that share one profile**.
+A personal, **US-remote-first job finder** that runs on your machine. It polls
+job boards and company application pages, deduplicates, filters to remote/US,
+ranks each role against your criteria, stores them so each run only surfaces
+what's **new**, and notifies you.
 
-- **Tool A — Job Finder:** a local Python service that finds and ranks job postings against your resume.
-- **Tool B — Autofill:** a Chrome extension that fills application forms from your profile while you review and submit.
-
-Neither tool requires the other. Both read a single `profile.json` derived from your resume.
+**Scope decision:** autofill is intentionally **out**. You already use
+Simplify/JobRight for filling application forms — duplicating that adds no
+value. JobPilot solves the harder daily problem: reliably surfacing the *right*
+remote listings. When you click an apply link, Simplify takes over.
 
 ---
 
 ## Goals & non-goals
 
 **Goals**
-- Find relevant jobs automatically on a schedule (every 3–6h) from legal aggregator APIs.
-- Rank them against your resume with an explanation, so you spend time only on good matches.
-- Make applying faster by auto-filling application forms from your profile.
-- Keep a human in the loop: **you approve and submit every application.**
-- Run entirely on your local machine.
+- Surface fresh, relevant **remote US** roles automatically, 3×/day.
+- Rank against your criteria with a plain-language reason per job.
+- Pull from both channels: **job boards** (Adzuna, Remotive) *and* **company
+  application pages** (Greenhouse, Lever, Ashby — the forms you actually apply on).
+- Never show the same job twice; notify you when (and only when) there's something new.
+- Run locally, free by default, with optional paid upgrades.
 
-**Non-goals (by design)**
-- No fully-automatic submission of applications (ToS risk, low quality, reputational risk).
-- No scraping of LinkedIn / Indeed or other sources that prohibit automation.
-- No bypassing bot detection or CAPTCHAs.
+**Non-goals**
+- No autofill / auto-submit (Simplify owns that).
+- No scraping of sites that forbid it (LinkedIn/Indeed only via a licensed
+  aggregator, optional).
 
 ---
 
-## Shared foundation: the profile
+## What you target
 
-A single structured `profile.json` is the contract between both tools.
+No fixed "dream company" list. The goal is **good companies with good pay,
+good benefits, and good work-life balance — remote only, for now.** That shapes
+the strategy:
 
-- **Capture:** parse your resume **PDF** to pre-fill, then you **correct/complete it in a form**. PDF parsing is convenient but lossy; the form makes it exact.
-- **Contents:** name, email, phone, location, links (LinkedIn/GitHub/portfolio), work history (title, company, dates, bullets), education, skills, work authorization, and common EEO/voluntary-disclosure answers.
-- **Storage:** `profile.json` on disk + a `profile` row in SQLite. Tool A reads it to match; Tool B reads it to fill.
+- **Broad remote sources do the heavy lifting:** Remotive (remote-only board)
+  and Adzuna (remote queries) surface roles across many companies.
+- **A curated watchlist of remote-friendly, well-compensated companies** (that
+  post on Greenhouse/Lever/Ashby) catches their roles the moment they post,
+  before aggregators index them. This list is maintained for you — you don't
+  have to name companies.
+- **Ranking rewards** disclosed comp and (later) WLB/benefits signals; hard
+  filters drop on-site and non-US roles.
+
+---
+
+## Pipeline
 
 ```
-            ┌─────────────┐
-            │ profile.json│  ← parsed from resume PDF, corrected in a form
-            └──────┬──────┘
-          reads    │    reads
-        ┌──────────┴──────────┐
-   ┌────▼─────┐         ┌──────▼──────┐
-   │ Tool A   │         │  Tool B     │
-   │ Finder   │         │  Autofill   │
-   │ (Python) │         │ (extension) │
-   └──────────┘         └─────────────┘
+ cron 9am / 2pm / 9pm
+        │
+        ▼
+   ┌─────────┐   Adzuna · Remotive · Greenhouse/Lever/Ashby watchlist
+   │ Fetchers│   (one interface — adding a source is a config flip)
+   └────┬────┘
+        ▼
+   ┌─────────┐   normalize → one job schema
+   │  Dedup  │   collapse reposts / cross-source duplicates (dedup_key)
+   └────┬────┘
+        ▼
+   ┌─────────┐   HARD filters: remote-only, US-only, dealbreaker keywords
+   │ Filter  │   (this is what removes the noise other feeds bury you in)
+   └────┬────┘
+        ▼
+   ┌─────────┐   rule-based score (free) + optional Claude Haiku on the
+   │  Rank   │   shortlist → 0-100 + reason + red-flag flags
+   └────┬────┘
+        ▼
+   ┌─────────┐   SQLite: status new/seen/applied/skipped; "what's new" detection
+   │  Store  │
+   └────┬────┘
+        ▼
+   ┌─────────┐   daily markdown digest +
+   │ Notify  │   desktop ping every run (confirms cron fired) +
+   └─────────┘   email when there are new matches
 ```
 
----
-
-## Tool A — Job Finder (Python service)
-
-**Pipeline**
-1. **Fetch** new postings from aggregator APIs (cron, every 3–6h).
-2. **Normalize** into a common job schema; **dedupe** by (title, company, url hash).
-3. **Pre-filter (cheap, local):** embed job + resume with `sentence-transformers`; keep the top-N by cosine similarity.
-4. **Score (LLM):** Claude scores each shortlisted job 0–100 with a one-line reason and any red flags.
-5. **Store** in SQLite; mark status `matched`.
-6. **Surface:** local FastAPI dashboard at `localhost:8000` showing the ranked queue; desktop notification on new high-scoring matches.
-7. **Review:** you Approve / Skip; status tracked through `matched → approved → applied → interview → rejected/offer`.
-
-**Job sources (legal aggregator APIs)**
-- Adzuna (broad, free key, good filters) — primary.
-- Greenhouse / Lever / Ashby public board JSON endpoints — also the ATSes Tool B fills, so finding → applying is seamless.
-- Remotive / Remote OK (remote roles), USAJobs (US gov) — optional add-ons.
-
-**Tech**
-- Python + FastAPI (dashboard + a tiny local API the extension can read the profile from).
-- SQLite (single-file, zero setup).
-- `sentence-transformers` for local embeddings (free first-pass filter).
-- Claude API for scoring + draft generation (only on the shortlist, to control cost).
-- Scheduling via cron (simple) or APScheduler (single-process alternative).
-
-**Data model (sketch)**
-- `profile` — the structured resume.
-- `jobs` — id, source, external_id, title, company, location, url, description, fetched_at, embedding.
-- `matches` — job_id, score, reason, flags, status, created_at.
-- `applications` — match_id, draft_cover_letter, submitted_at, outcome.
+Each job entry carries: **score, title, company, location, workplace, comp (if
+disclosed), why-it-fits, red-flag flags, and a direct apply link.**
 
 ---
 
-## Tool B — Autofill (Chrome extension)
+## Components (implemented)
 
-**Behavior**
-- Activates on a job application page (any job, whether found via Tool A or by you).
-- Detects the ATS form; maps `profile.json` fields → form fields.
-- Fills the form; **you review and click submit.** Never auto-submits.
+| Module | Role |
+|---|---|
+| `jobpilot/sources/*` | Greenhouse, Lever, Ashby, Remotive, Adzuna fetchers (one `Source` interface) |
+| `jobpilot/models.py` | Normalized `Job` + stable `dedup_key` |
+| `jobpilot/filters.py` | Remote / US / hybrid detection + hard dealbreaker filters |
+| `jobpilot/rank.py` | Transparent rule-based scorer; optional Claude Haiku refinement |
+| `jobpilot/db.py` | SQLite store; tracks status + "new since last run" |
+| `jobpilot/pipeline.py` | Orchestrates fetch→filter→dedup→rank→store→digest |
+| `jobpilot/notify.py` | Desktop ping + email (SMTP via env vars) |
+| `jobpilot/cli.py` | `run` / `list` commands |
 
-**ATS support order**
-1. Greenhouse, Lever, Ashby (predictable field names — high reliability).
-2. Later: Workday, Taleo (multi-step, iframes — messier).
+---
 
-**Tech**
-- TypeScript, Manifest V3, Chrome first.
-- Reads the profile from the local service (`localhost`) or an imported JSON, so there's a single source of truth.
+## Tech & defaults
+
+- **Python 3.11**, `requests` + `PyYAML`, **SQLite** (single file).
+- **Scoring:** rule-based and free by default; **Claude Haiku 4.5** refinement
+  is opt-in (`llm.enabled: true` + `ANTHROPIC_API_KEY`), and only the top
+  shortlist hits the API to keep cost low.
+- **Delivery:** local markdown digest + desktop notification; email digest when
+  SMTP env vars are set.
+- **Schedule:** cron at 9am / 2pm / 9pm.
+- **Filters:** `remote_only: true`, `us_only: true`, `allow_hybrid: false`
+  (toggle hybrid on later with a metro allowlist + comp floor).
+
+---
+
+## Sources & cost
+
+| Source | Channel | Key? | Cost |
+|---|---|---|---|
+| Greenhouse / Lever / Ashby | Company application pages | No | Free |
+| Remotive | Remote job board | No | Free |
+| Adzuna | Broad job board | Free key | Free tier (~250 req/day) |
+| Claude Haiku 4.5 | Ranking refinement | API key | ~$5–15/mo, optional |
+| *(later)* JSearch | LinkedIn/Indeed via Google for Jobs | Paid | ~$25/mo, optional |
+
+**Free core: ~$0/mo.** With Haiku scoring: **~$5–15/mo.** With LinkedIn/Indeed
+added: **~$30–40/mo.** Fetchers sit behind one interface, so upgrading is a
+config flip, not a rewrite.
 
 ---
 
 ## Build phases
 
-- **Phase 0 — Shared profile:** PDF parse → pre-filled form → `profile.json` + SQLite. *(prerequisite for both tools)*
-- **Phase 1 — Tool A MVP:** fetch from Adzuna + one board → dedupe → embed pre-filter → LLM score → dashboard queue with approve/skip + status. Links open the job.
-- **Phase 2 — Tool A polish:** LLM-drafted cover letters/screening answers, desktop notifications, cron scheduling.
-- **Phase 3 — Tool B MVP:** Chrome extension autofill for Greenhouse/Lever/Ashby.
-- **Phase 4:** more sources, Workday support, apply→response analytics.
-
----
-
-## Defaults (overridable)
-
-- **LLM:** Claude API for scoring/drafting; free local embeddings for first-pass filter (cost control). A fully-local model is possible if zero per-run cost is required.
-- **Browser:** Chrome first; Firefox later.
-- **Notifications:** desktop pop-up for MVP; email digest later.
+- **Phase 1 — DONE.** Fetch → filter → dedup → rank → store → daily digest +
+  notifications. Runs free; verified end-to-end offline (`run --dry-run`).
+- **Phase 2 — next.** Parse your résumé → `profile.json`; turn on Haiku scoring
+  so "why it fits" reflects your actual background. Curate the remote-friendly
+  company watchlist.
+- **Phase 3.** Local dashboard (mark applied/skipped); richer email formatting.
+- **Phase 4.** 👍/👎 feedback tuning; optional JSearch for LinkedIn/Indeed;
+  hybrid allowlist + comp floor.
 
 ---
 
 ## Risks & guardrails
 
-- **ToS / bans:** only aggregator APIs and public board endpoints; no scraping of sites that forbid it.
-- **Human-in-the-loop:** every application is reviewed and submitted by you. No auto-submit.
-- **PDF parsing accuracy:** mitigated by the correction form.
-- **LLM cost:** mitigated by local pre-filter; only the shortlist hits the API.
-- **Privacy:** everything runs locally; resume/profile data stays on your machine.
+- **ToS:** only aggregator APIs and public company-board endpoints; LinkedIn/
+  Indeed solely via a licensed aggregator if added.
+- **Noise vs. coverage:** hard filters cut noise; if a niche is thin, no tool
+  manufactures listings — the honest limit of any finder.
+- **Maintenance tail:** company slugs/APIs shift occasionally; low but non-zero.
+- **Privacy:** everything runs locally; your résumé/criteria stay on your machine.

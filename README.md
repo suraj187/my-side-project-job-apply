@@ -43,15 +43,27 @@ python -m jobpilot.cli list --status new
 Adzuna and LLM scoring are **off until you provide keys** — the tool runs free
 out of the box on company boards + Remotive.
 
+## Notifications
+
+`--notify` sends a **desktop ping every run** (so you know the cron fired) and
+**emails the digest only when there are new matches**. Email needs these env
+vars (Gmail: use an App Password):
+
+```bash
+export SMTP_HOST=smtp.gmail.com SMTP_PORT=587
+export SMTP_USER=you@gmail.com SMTP_PASS=your_app_password
+export NOTIFY_EMAIL=you@gmail.com
+```
+
 ## Scheduling (3×/day: 9am, 2pm, 9pm)
 
 ```cron
-0 9,14,21 * * *  cd /path/to/jobpilot && /usr/bin/python3 -m jobpilot.cli run >> jobpilot.log 2>&1
+0 9,14,21 * * *  cd /path/to/jobpilot && /usr/bin/python3 -m jobpilot.cli run --notify >> jobpilot.log 2>&1
 ```
 
 ## Status
 
-- [x] Phase 1 — fetch → filter → dedup → rank → store → daily markdown digest
-- [ ] Phase 2 — LLM scoring wired to your parsed resume (scaffolded, off by default)
-- [ ] Phase 3 — desktop notifications + local dashboard
+- [x] Phase 1 — fetch → filter → dedup → rank → store → daily digest + notifications
+- [ ] Phase 2 — Haiku scoring wired to your parsed résumé (scaffolded, off by default)
+- [ ] Phase 3 — local dashboard (mark applied/skipped); richer email
 - [ ] Phase 4 — 👍/👎 feedback tuning; optional JSearch (LinkedIn/Indeed)
