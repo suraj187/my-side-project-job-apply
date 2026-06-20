@@ -1,0 +1,14 @@
+# User-specific config (copy from the .example files)
+config/criteria.yaml
+config/companies.yaml
+
+# Runtime data
+*.db
+digests/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

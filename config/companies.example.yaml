@@ -1,0 +1,19 @@
+# Copy to config/companies.yaml and edit.
+# Your watchlist of companies whose application pages to poll directly.
+# The slug is the company's identifier in that ATS's URL. Examples below are
+# illustrative — replace with the companies YOU want, and verify each slug by
+# opening the endpoint in a browser:
+#   Greenhouse: https://boards-api.greenhouse.io/v1/boards/<slug>/jobs
+#   Lever:      https://api.lever.co/v0/postings/<slug>?mode=json
+#   Ashby:      https://api.ashbyhq.com/posting-api/job-board/<slug>
+
+greenhouse:
+  - stripe
+  - figma
+
+lever:
+  - netflix
+
+ashby:
+  - linear
+  - ramp

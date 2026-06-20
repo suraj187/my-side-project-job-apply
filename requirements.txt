@@ -1,0 +1,4 @@
+requests>=2.31
+PyYAML>=6.0
+# Optional — only needed if you enable LLM scoring (criteria.yaml: llm.enabled: true)
+# anthropic>=0.40

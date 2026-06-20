@@ -1,0 +1,44 @@
+# Copy to config/criteria.yaml and edit. This drives matching + filtering.
+
+# Target role titles (strongest match signal).
+titles:
+  - Software Engineer
+  - Backend Engineer
+  - Full Stack Engineer
+  - Platform Engineer
+
+# Skills/keywords that should appear in a good match.
+keywords:
+  - Python
+  - TypeScript
+  - React
+  - AWS
+  - PostgreSQL
+
+# Hard dealbreakers — any match here drops the job.
+dealbreaker_keywords:
+  - clearance
+  - on-site only
+  - unpaid
+
+exclude_companies: []
+
+# Filters (your stated priorities).
+remote_only: true
+allow_hybrid: false      # flip to true later to allow hybrid
+us_only: true
+min_score: 40            # don't surface anything below this
+
+# Queries sent to the broad job boards (only used if those sources are on).
+adzuna_queries:
+  - remote software engineer
+  - remote backend engineer
+remotive_queries:
+  - software
+  - backend
+
+# LLM scoring. Off by default (runs free). Turn on once you add an API key.
+llm:
+  enabled: false
+  model: claude-haiku-4-5
+  shortlist_size: 25     # only the top N jobs hit the API per run
