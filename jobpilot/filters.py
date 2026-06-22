@@ -83,4 +83,9 @@ def passes_hard_filters(job: Job, criteria) -> tuple[bool, str]:
         if _norm(job.company) in {c.lower() for c in criteria.exclude_companies}:
             return False, "excluded company"
 
+    if criteria.consulting_firm_keywords:
+        for firm in criteria.consulting_firm_keywords:
+            if firm and firm.lower() in blob:
+                return False, f"consulting firm: {firm}"
+
     return True, ""

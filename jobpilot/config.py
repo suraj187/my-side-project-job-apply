@@ -28,6 +28,8 @@ class Criteria:
     min_score: int = 40            # don't surface anything below this
     adzuna_queries: list[str] = field(default_factory=list)
     remotive_queries: list[str] = field(default_factory=list)
+    jsearch_queries: list[str] = field(default_factory=list)
+    consulting_firm_keywords: list[str] = field(default_factory=list)
     llm: LLMConfig = field(default_factory=LLMConfig)
 
 
@@ -44,6 +46,8 @@ class Settings:
     companies: Companies
     adzuna_app_id: str = ""
     adzuna_app_key: str = ""
+    rapidapi_key: str = ""
+    rapidapi_host: str = "jsearch.p.rapidapi.com"
 
 
 def _load_yaml(path: str) -> dict[str, Any]:
@@ -66,4 +70,5 @@ def load_settings(criteria_path: str, companies_path: str) -> Settings:
         companies=companies,
         adzuna_app_id=os.environ.get("ADZUNA_APP_ID", ""),
         adzuna_app_key=os.environ.get("ADZUNA_APP_KEY", ""),
+        rapidapi_key=os.environ.get("RAPIDAPI_KEY", ""),
     )

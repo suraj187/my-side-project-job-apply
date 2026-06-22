@@ -7,6 +7,7 @@ from .lever import LeverSource
 from .ashby import AshbySource
 from .remotive import RemotiveSource
 from .adzuna import AdzunaSource
+from .jsearch import JSearchSource
 
 __all__ = [
     "GreenhouseSource",
@@ -14,6 +15,7 @@ __all__ = [
     "AshbySource",
     "RemotiveSource",
     "AdzunaSource",
+    "JSearchSource",
     "build_sources",
 ]
 
@@ -35,5 +37,10 @@ def build_sources(settings):
             settings.adzuna_app_id,
             settings.adzuna_app_key,
             settings.criteria.adzuna_queries,
+        ))
+    if settings.rapidapi_key and settings.criteria.jsearch_queries:
+        sources.append(JSearchSource(
+            settings.criteria.jsearch_queries,
+            settings.rapidapi_key,
         ))
     return sources

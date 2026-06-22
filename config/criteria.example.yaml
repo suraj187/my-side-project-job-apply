@@ -23,6 +23,10 @@ dealbreaker_keywords:
 
 exclude_companies: []
 
+# Consulting firms to filter out (they often disguise direct-hire as contracting).
+# Common: TEKsystems, Cognizant, Infosys, Accenture, Deloitte, Wipro, TCS, etc.
+consulting_firm_keywords: []
+
 # Filters (your stated priorities).
 remote_only: true
 allow_hybrid: false      # flip to true later to allow hybrid
@@ -36,6 +40,12 @@ adzuna_queries:
 remotive_queries:
   - software
   - backend
+
+# JSearch queries (LinkedIn + Indeed + Glassdoor via RapidAPI).
+# Requires RAPIDAPI_KEY env var. Powered by Google for Jobs.
+jsearch_queries:
+  - remote software engineer
+  - remote backend engineer
 
 # LLM scoring. Off by default (runs free). Turn on once you add an API key.
 llm:
