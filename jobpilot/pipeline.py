@@ -56,16 +56,23 @@ def run(settings: Settings, db_path: str, digest_dir: str = ".",
             jobs.extend(got)
     fetched = len(jobs)
 
-    # 2. In-run dedup — collapse same title+company seen from multiple sources/queries
+    # 2. In-run dedup — collapse same job seen from multiple sources/queries.
+    # Primary key: dedup_key (SHA1 of title+company+url). Catches exact same URL.
+    # Secondary key: (title_slug, company_slug). Catches same role posted under
+    # different Adzuna/JSearch listing IDs (same title+company, different URL).
+    from .models import _slug as _s
     seen_keys: set[str] = set()
+    seen_title_company: set[tuple[str, str]] = set()
     unique_jobs: list[Job] = []
     for job in jobs:
         k = job.dedup_key
-        if k not in seen_keys:
-            seen_keys.add(k)
-            unique_jobs.append(job)
-        else:
+        tc = (_s(job.title), _s(job.company))
+        if k in seen_keys or tc in seen_title_company:
             log.debug("in-run dedup: skip %s @ %s", job.title, job.company)
+            continue
+        seen_keys.add(k)
+        seen_title_company.add(tc)
+        unique_jobs.append(job)
     jobs = unique_jobs
 
     # 3. Hard filters (dealbreakers)
