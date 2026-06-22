@@ -39,6 +39,12 @@ class AdzunaSource(Source):
             for j in (data or {}).get("results", []):
                 company = (j.get("company") or {}).get("display_name", "")
                 location = (j.get("location") or {}).get("display_name", "")
+                smin, smax = j.get("salary_min"), j.get("salary_max")
+                comp = ""
+                if smin and smax:
+                    comp = f"${int(smin):,} - ${int(smax):,}"
+                    if str(j.get("salary_is_predicted")) == "1":
+                        comp += " (est.)"
                 jobs.append(Job(
                     source=self.name,
                     title=j.get("title", ""),
@@ -46,6 +52,7 @@ class AdzunaSource(Source):
                     url=j.get("redirect_url", ""),
                     location=location,
                     description=(j.get("description") or "")[:4000],
+                    comp=comp,
                     posted_at=j.get("created", ""),
                     external_id=str(j.get("id", "")),
                     raw=j,
