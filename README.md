@@ -61,6 +61,21 @@ export NOTIFY_EMAIL=you@gmail.com
 0 9,14,21 * * *  cd /path/to/jobpilot && /usr/bin/python3 -m jobpilot.cli run --notify >> jobpilot.log 2>&1
 ```
 
+### cron vs. launchd (macOS laptops)
+
+We currently use **cron**. Trade-off worth knowing:
+
+- **cron** only fires if the Mac is **awake at the exact time** (9/2/9). If the
+  laptop is asleep/off at 9am, that run is **skipped** — it does *not* catch up
+  on wake. No jobs are lost, though: each run pulls the last 7 days, so the next
+  run that fires still surfaces everything new (dedup prevents repeats). Practical
+  effect: open the laptop by ~10am and the 2pm run delivers the morning's jobs.
+- **launchd** (`StartCalendarInterval`) **runs missed jobs the moment the Mac
+  wakes**, so you never miss a slot. More setup; no Full Disk Access prompt.
+
+Decision: keeping cron for now since the laptop is usually on during the day.
+Revisit launchd after a few weeks if missed morning runs become annoying.
+
 ## Status
 
 - [x] Phase 1 — fetch → filter → dedup → rank → store → daily digest + notifications

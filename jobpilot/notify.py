@@ -82,7 +82,25 @@ def _score_color(score: int) -> str:
     return "#57606a"
 
 
-def _html(jobs, run_dt) -> str:
+def _timeframe(dt) -> str:
+    """e.g. 'Jun 22, 2026 (Morning)' — date plus which daily run slot."""
+    h = dt.hour
+    slot = "Morning" if h < 12 else ("Afternoon" if h < 17 else "Evening")
+    return f"{dt.strftime('%b %d, %Y')} ({slot})"
+
+
+def _link_html(statuses, url) -> str:
+    if statuses is None:
+        return ""
+    ok, note = statuses.get(url, (False, "unverified"))
+    if ok:
+        return ('<div style="color:#1a7f37;font-size:12px;margin-top:4px;">'
+                '✓ Link verified</div>')
+    return ('<div style="color:#9a6700;font-size:12px;margin-top:4px;">'
+            f'⚠ Link unverified ({html.escape(note)}) — may be expired</div>')
+
+
+def _html(jobs, run_dt, statuses=None) -> str:
     n = len(jobs)
     parts = [
         '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:680px;margin:0 auto;padding:8px;color:#1f2328;">',
@@ -103,6 +121,7 @@ def _html(jobs, run_dt) -> str:
             f'{comp_html}'
             f'<div style="color:#57606a;font-size:13px;margin-top:6px;">\U0001f552 Posted: {html.escape(_fmt_posted(j.posted_at))}</div>'
             f'<div style="color:#57606a;font-size:13px;margin-top:2px;">\U0001f4cb {html.escape(j.source)} &nbsp;\u00b7&nbsp; \u2705 {html.escape(_humanize_reason(j.reason))}</div>'
+            f'{_link_html(statuses, j.url)}'
             f'<div style="font-size:13px;line-height:1.55;margin-top:10px;">{html.escape(_snippet(j.description, 500))}</div>'
             f'<div style="margin-top:12px;"><a href="{html.escape(j.url)}" style="display:inline-block;background:#1f883d;color:#ffffff;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;">Apply / View posting \u2192</a></div>'
             '</div>'
@@ -111,7 +130,7 @@ def _html(jobs, run_dt) -> str:
     return "".join(parts)
 
 
-def _text(jobs, run_dt) -> str:
+def _text(jobs, run_dt, statuses=None) -> str:
     lines = [f"JobPilot \u2014 {len(jobs)} new IAM roles",
              run_dt.strftime("Run: %A, %B %d, %Y \u00b7 %I:%M %p"), ""]
     for j in jobs:
@@ -121,6 +140,9 @@ def _text(jobs, run_dt) -> str:
             lines.append(f"  Salary: {j.comp}")
         lines.append(f"  Posted: {_fmt_posted(j.posted_at)}")
         lines.append(f"  Source: {j.source} \u00b7 Why: {_humanize_reason(j.reason)}")
+        if statuses is not None:
+            ok, note = statuses.get(j.url, (False, "unverified"))
+            lines.append(f"  Link: {'verified' if ok else f'unverified ({note}) - may be expired'}")
         snip = _snippet(j.description, 300)
         if snip:
             lines.append(f"  {snip}")
@@ -160,18 +182,27 @@ def send_email(subject: str, text_body: str, html_body: str | None = None) -> bo
         return False
 
 
-def notify_run(result, *, want_desktop: bool = True, want_email: bool = True) -> list[str]:
+def notify_run(result, *, want_desktop: bool = True, want_email: bool = True,
+               want_validate: bool = True) -> list[str]:
     jobs = result.new_jobs
     n = len(jobs)
     run_dt = datetime.now()
-    title = f"JobPilot: {n} new IAM role{'s' if n != 1 else ''}"
+    subject = f"JobPilot - {n} Jobs to apply \u00b7 {_timeframe(run_dt)}"
     summary = (f"Top: [{jobs[0].score}] {jobs[0].title} \u2014 {jobs[0].company}"
                if jobs else "Ran OK \u2014 no new matches this run.")
 
     fired: list[str] = []
-    if want_desktop and desktop(title, summary):
+    if want_desktop and desktop(subject, summary):
         fired.append("desktop")
     if want_email and n > 0:
-        if send_email(title, _text(jobs, run_dt), _html(jobs, run_dt)):
+        statuses = None
+        if want_validate:
+            try:
+                from .linkcheck import check_links
+                statuses = check_links([j.url for j in jobs])
+            except Exception as exc:
+                log.warning("link validation skipped (%s)", exc)
+        if send_email(subject, _text(jobs, run_dt, statuses),
+                      _html(jobs, run_dt, statuses)):
             fired.append("email")
     return fired
