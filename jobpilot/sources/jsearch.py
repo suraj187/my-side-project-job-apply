@@ -18,6 +18,17 @@ log = logging.getLogger("jobpilot.sources.jsearch")
 
 _URL = "https://jsearch.p.rapidapi.com/search"
 
+# Domains that appear as employer_name but are just job-board/aggregator tech stacks.
+# Jobs from these "employers" are junk re-listings, not real postings.
+_JUNK_EMPLOYER_PATTERNS = (
+    "railway.app",
+    "vercel.app",
+    "netlify.app",
+    "ngrok.io",
+    "herokuapp.com",
+    "render.com",
+)
+
 
 class JSearchSource(Source):
     name = "jsearch"
@@ -67,6 +78,10 @@ class JSearchSource(Source):
         jobs = []
         for j in (data or {}).get("data", []):
             if not j.get("job_apply_link"):
+                continue
+            employer = j.get("employer_name", "") or ""
+            if any(pat in employer.lower() for pat in _JUNK_EMPLOYER_PATTERNS):
+                log.debug("jsearch: skip junk employer '%s'", employer)
                 continue
             jobs.append(Job(
                 source=self.name,

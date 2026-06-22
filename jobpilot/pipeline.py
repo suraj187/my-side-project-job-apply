@@ -56,7 +56,19 @@ def run(settings: Settings, db_path: str, digest_dir: str = ".",
             jobs.extend(got)
     fetched = len(jobs)
 
-    # 2. Hard filters (dealbreakers)
+    # 2. In-run dedup — collapse same title+company seen from multiple sources/queries
+    seen_keys: set[str] = set()
+    unique_jobs: list[Job] = []
+    for job in jobs:
+        k = job.dedup_key
+        if k not in seen_keys:
+            seen_keys.add(k)
+            unique_jobs.append(job)
+        else:
+            log.debug("in-run dedup: skip %s @ %s", job.title, job.company)
+    jobs = unique_jobs
+
+    # 3. Hard filters (dealbreakers)
     kept: list[Job] = []
     for job in jobs:
         ok, why = passes_hard_filters(job, settings.criteria)
@@ -65,11 +77,11 @@ def run(settings: Settings, db_path: str, digest_dir: str = ".",
         else:
             log.debug("drop %s @ %s: %s", job.title, job.company, why)
 
-    # 3. Rank (rule-based, plus optional LLM on the shortlist)
+    # 4. Rank (rule-based, plus optional LLM on the shortlist)
     kept = rank(kept, settings.criteria)
     kept = [j for j in kept if j.score >= settings.criteria.min_score]
 
-    # 4. Store + detect what's new
+    # 5. Store + detect what's new
     db = DB(db_path)
     new_jobs: list[Job] = []
     try:
@@ -79,7 +91,7 @@ def run(settings: Settings, db_path: str, digest_dir: str = ".",
     finally:
         db.close()
 
-    # 5. Digest of new matches
+    # 6. Digest of new matches
     digest_path = _write_digest(new_jobs, digest_dir)
     return RunResult(fetched=fetched, after_filter=len(kept),
                      new_jobs=new_jobs, digest_path=digest_path)
