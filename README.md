@@ -38,10 +38,39 @@ python -m jobpilot.cli list --status new
 | Greenhouse / Lever / Ashby | Company application pages | No | Free |
 | Remotive | Remote job board | No | Free |
 | Adzuna | Broad job board | Free key (`ADZUNA_APP_ID`/`ADZUNA_APP_KEY`) | Free tier |
+| JSearch | LinkedIn + Indeed + Glassdoor via RapidAPI | `RAPIDAPI_KEY` | Free tier (~10 req/day) |
 | LLM scoring (Claude Haiku) | Ranking refinement | `ANTHROPIC_API_KEY` | ~$5–15/mo, optional |
 
-Adzuna and LLM scoring are **off until you provide keys** — the tool runs free
+Adzuna, JSearch, and LLM scoring are **off until you provide keys** — the tool runs free
 out of the box on company boards + Remotive.
+
+### RapidAPI / JSearch setup (optional)
+
+To enable LinkedIn + Indeed + Glassdoor integration:
+
+1. **Sign up free at [RapidAPI](https://rapidapi.com/)** and subscribe to JSearch (free tier = ~10 requests/day).
+2. **Get your API key** from the RapidAPI dashboard (under your profile).
+3. **Export the key** in your shell:
+   ```bash
+   export RAPIDAPI_KEY=your_rapidapi_key_here
+   ```
+4. **Add JSearch queries** to `config/criteria.yaml`:
+   ```yaml
+   jsearch_queries:
+     - remote sailpoint engineer
+     - remote iam engineer
+   ```
+5. **Optional: Filter consulting firms** that often masquerade as direct-hire:
+   ```yaml
+   consulting_firm_keywords:
+     - teksystems
+     - cognizant
+     - infosys
+     - accenture
+     - deloitte
+     - wipro
+     - tcs
+   ```
 
 ## Notifications
 
