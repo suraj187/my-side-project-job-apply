@@ -44,6 +44,45 @@ def _cmd_list(args) -> None:
         db.close()
 
 
+def _cmd_weekly(args) -> None:
+    """Send weekly digest email with all jobs from past 7 days."""
+    from datetime import datetime, timedelta, timezone
+    from .models import Job
+    from .notify import notify_weekly
+
+    db = DB(args.db)
+    try:
+        # Get all jobs from past 7 days
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        rows = db.conn.execute(
+            "SELECT * FROM jobs WHERE first_seen >= ? ORDER BY score DESC",
+            (cutoff,)
+        ).fetchall()
+
+        jobs = [Job(
+            source=row["source"],
+            title=row["title"],
+            company=row["company"],
+            url=row["url"],
+            location=row["location"],
+            description="",
+            remote=bool(row.get("remote")),
+            workplace=row["workplace"],
+            comp=row["comp"],
+            posted_at=row["posted_at"],
+            external_id=row["external_id"],
+            score=row["score"],
+            reason=row["reason"],
+            flags=[],
+        ) for row in rows]
+
+        print(f"Weekly digest: {len(jobs)} jobs from past 7 days")
+        fired = notify_weekly(jobs)
+        print(f"Notified via: {', '.join(fired) or 'none (channels unavailable)'}")
+    finally:
+        db.close()
+
+
 def main(argv=None) -> None:
     logging.basicConfig(level=os.environ.get("JOBPILOT_LOG", "INFO"),
                         format="%(levelname)s %(name)s: %(message)s")
@@ -64,6 +103,9 @@ def main(argv=None) -> None:
     pl.add_argument("--status", default=None)
     pl.add_argument("--limit", type=int, default=50)
     pl.set_defaults(func=_cmd_list)
+
+    pw = sub.add_parser("weekly", help="send weekly digest email (past 7 days)")
+    pw.set_defaults(func=_cmd_weekly)
 
     args = p.parse_args(argv)
     args.func(args)

@@ -1,0 +1,5 @@
+#!/bin/bash
+source "$HOME/.jobpilot.env"
+mkdir -p "$HOME/job-digests"
+cd "$HOME/my-side-project-job-apply"
+"$HOME/my-side-project-job-apply/venv/bin/python" -m jobpilot.cli --db "$HOME/.jobpilot.db" weekly >> "$HOME/job-digests/launchd-weekly.log" 2>&1

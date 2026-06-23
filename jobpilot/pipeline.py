@@ -95,6 +95,22 @@ def run(settings: Settings, db_path: str, digest_dir: str = ".",
         for job in kept:
             if db.upsert(job):
                 new_jobs.append(job)
+
+        # 5b. Sync new jobs to Notion (optional)
+        if settings.notion_api_key and settings.notion_database_id:
+            try:
+                from .notion import sync_jobs_to_notion
+                job_id_map = db.get_notion_id_map()
+                updated = sync_jobs_to_notion(
+                    new_jobs,
+                    settings.notion_api_key,
+                    settings.notion_database_id,
+                    job_id_map,
+                )
+                for dedup_key, notion_row_id in updated.items():
+                    db.set_notion_row_id(dedup_key, notion_row_id)
+            except Exception as exc:
+                log.warning("notion sync failed (%s)", exc)
     finally:
         db.close()
 

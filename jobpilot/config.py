@@ -48,6 +48,8 @@ class Settings:
     adzuna_app_key: str = ""
     rapidapi_key: str = ""
     rapidapi_host: str = "jsearch.p.rapidapi.com"
+    notion_api_key: str = ""
+    notion_database_id: str = ""
 
 
 def _load_yaml(path: str) -> dict[str, Any]:
@@ -71,4 +73,6 @@ def load_settings(criteria_path: str, companies_path: str) -> Settings:
         adzuna_app_id=os.environ.get("ADZUNA_APP_ID", ""),
         adzuna_app_key=os.environ.get("ADZUNA_APP_KEY", ""),
         rapidapi_key=os.environ.get("RAPIDAPI_KEY", ""),
+        notion_api_key=os.environ.get("NOTION_API_KEY", ""),
+        notion_database_id=os.environ.get("NOTION_DATABASE_ID", ""),
     )

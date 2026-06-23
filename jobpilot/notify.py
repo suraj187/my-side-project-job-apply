@@ -206,3 +206,21 @@ def notify_run(result, *, want_desktop: bool = True, want_email: bool = True,
                       _html(jobs, run_dt, statuses)):
             fired.append("email")
     return fired
+
+
+def notify_weekly(jobs: list, *, want_email: bool = True) -> list[str]:
+    """Send weekly digest email showing all jobs with their current status."""
+    n = len(jobs)
+    run_dt = datetime.now()
+    subject = f"JobPilot — Weekly Summary · {_timeframe(run_dt)}"
+    summary = (f"This week: {n} matching role(s)" if n > 0
+              else "No new matches this week.")
+
+    fired: list[str] = []
+    if want_email and n > 0:
+        statuses = None
+        # Note: weekly digest doesn't do link validation (runs only once/week)
+        if send_email(subject, _text(jobs, run_dt, statuses),
+                      _html(jobs, run_dt, statuses)):
+            fired.append("email")
+    return fired

@@ -10,22 +10,23 @@ from .models import Job
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
-    dedup_key   TEXT PRIMARY KEY,
-    source      TEXT,
-    title       TEXT,
-    company     TEXT,
-    url         TEXT,
-    location    TEXT,
-    workplace   TEXT,
-    comp        TEXT,
-    posted_at   TEXT,
-    external_id TEXT,
-    score       INTEGER,
-    reason      TEXT,
-    flags       TEXT,
-    status      TEXT DEFAULT 'new',   -- new | seen | applied | skipped
-    first_seen  TEXT,
-    last_seen   TEXT
+    dedup_key      TEXT PRIMARY KEY,
+    source         TEXT,
+    title          TEXT,
+    company        TEXT,
+    url            TEXT,
+    location       TEXT,
+    workplace      TEXT,
+    comp           TEXT,
+    posted_at      TEXT,
+    external_id    TEXT,
+    score          INTEGER,
+    reason         TEXT,
+    flags          TEXT,
+    status         TEXT DEFAULT 'new',
+    first_seen     TEXT,
+    last_seen      TEXT,
+    notion_row_id  TEXT
 );
 """
 
@@ -82,6 +83,16 @@ class DB:
     def set_status(self, dedup_key: str, status: str) -> None:
         self.conn.execute("UPDATE jobs SET status=? WHERE dedup_key=?", (status, dedup_key))
         self.conn.commit()
+
+    def set_notion_row_id(self, dedup_key: str, notion_row_id: str) -> None:
+        self.conn.execute("UPDATE jobs SET notion_row_id=? WHERE dedup_key=?",
+                         (notion_row_id, dedup_key))
+        self.conn.commit()
+
+    def get_notion_id_map(self) -> dict[str, str]:
+        """Return {dedup_key: notion_row_id} for all jobs with notion_row_id set."""
+        rows = self.conn.execute("SELECT dedup_key, notion_row_id FROM jobs WHERE notion_row_id IS NOT NULL")
+        return {row[0]: row[1] for row in rows}
 
     def close(self) -> None:
         self.conn.close()
