@@ -66,7 +66,7 @@ def _cmd_weekly(args) -> None:
             url=row["url"],
             location=row["location"],
             description="",
-            remote=bool(row.get("remote")),
+            remote=bool(dict(row).get("remote", False)),
             workplace=row["workplace"],
             comp=row["comp"],
             posted_at=row["posted_at"],
