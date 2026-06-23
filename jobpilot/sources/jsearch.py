@@ -88,9 +88,10 @@ class JSearchSource(Source):
                 title=j.get("job_title", ""),
                 company=j.get("employer_name", ""),
                 url=j.get("job_apply_link", ""),
-                location=j.get("job_location", ""),
+                location=self._location(j),
                 description=(j.get("job_description", "") or "")[:4000],
-                workplace=self._detect_workplace(j.get("job_description", "")),
+                remote=bool(j.get("job_is_remote")),
+                workplace=self._workplace(j),
                 comp=self._extract_salary(j),
                 posted_at=j.get("job_posted_publish_date", ""),
                 external_id=j.get("job_id", ""),
@@ -98,14 +99,20 @@ class JSearchSource(Source):
             ))
         return jobs
 
-    def _detect_workplace(self, description: str) -> str:
-        """Infer workplace type from description (remote/hybrid/onsite)."""
-        desc_lower = (description or "").lower()
-        if "remote" in desc_lower:
-            if "hybrid" in desc_lower or "partially" in desc_lower:
-                return "hybrid"
+    def _location(self, job: dict[str, Any]) -> str:
+        """Build a readable location from JSearch's structured fields."""
+        parts = [job.get("job_city"), job.get("job_state"), job.get("job_country")]
+        loc = ", ".join(p for p in parts if p)
+        if loc:
+            return loc
+        return job.get("job_location", "") or ""
+
+    def _workplace(self, job: dict[str, Any]) -> str:
+        """Use JSearch's structured remote flag; fall back to '' (unknown) so
+        the pipeline's location heuristics decide rather than the query keyword."""
+        if job.get("job_is_remote"):
             return "remote"
-        return "onsite"
+        return ""
 
     def _extract_salary(self, job: dict[str, Any]) -> str:
         """Extract salary range if available."""

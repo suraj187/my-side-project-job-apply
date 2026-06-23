@@ -43,9 +43,12 @@ remotive_queries:
 
 # JSearch queries (LinkedIn + Indeed + Glassdoor via RapidAPI).
 # Requires RAPIDAPI_KEY env var. Powered by Google for Jobs.
+# NOTE: don't put "remote" in JSearch queries — the source reads each posting's
+# structured `job_is_remote` flag + location instead, so a role that IS remote
+# but doesn't say so in the title is still caught. remote_only still filters.
 jsearch_queries:
-  - remote software engineer
-  - remote backend engineer
+  - software engineer
+  - backend engineer
 
 # LLM scoring. Off by default (runs free). Turn on once you add an API key.
 llm:
