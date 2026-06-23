@@ -35,11 +35,21 @@ min_score: 40            # don't surface anything below this
 
 # Queries sent to the broad job boards (only used if those sources are on).
 adzuna_queries:
-  - remote software engineer
-  - remote backend engineer
+  - sailpoint iiq developer
+  - sailpoint identity cloud administrator
+  - sailpoint isc engineer
+  - sailpoint solutions architect
+  - sailpoint java developer
+  - identity governance engineer
+  - iam engineer remote
+
 remotive_queries:
-  - software
-  - backend
+  - sailpoint iiq
+  - sailpoint isc
+  - sailpoint developer
+  - sailpoint architect
+  - identity governance
+  - iam engineer
 
 # JSearch queries (LinkedIn + Indeed + Glassdoor via RapidAPI).
 # Requires RAPIDAPI_KEY env var. Powered by Google for Jobs.
@@ -47,8 +57,11 @@ remotive_queries:
 # structured `job_is_remote` flag + location instead, so a role that IS remote
 # but doesn't say so in the title is still caught. remote_only still filters.
 jsearch_queries:
-  - software engineer
-  - backend engineer
+  - sailpoint iiq developer
+  - sailpoint identity cloud administrator
+  - sailpoint isc engineer
+  - sailpoint solutions architect
+  - identity governance engineer
 
 # LLM scoring. Off by default (runs free). Turn on once you add an API key.
 llm:
