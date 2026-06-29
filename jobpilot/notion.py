@@ -126,7 +126,10 @@ def _create_notion_job(
             headers=headers,
             timeout=20,
         )
-        resp.raise_for_status()
+        if not resp.ok:
+            log.warning("notion: POST /pages failed (%s) — %s",
+                        resp.status_code, resp.text[:400])
+            return None
         data = resp.json()
         return data.get("id", "")
     except Exception as exc:
