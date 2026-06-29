@@ -94,9 +94,11 @@ def load_settings(criteria_path: str, companies_path: str) -> Settings:
     return Settings(
         criteria=criteria,
         companies=companies,
-        adzuna_app_id=os.environ.get("ADZUNA_APP_ID", ""),
-        adzuna_app_key=os.environ.get("ADZUNA_APP_KEY", ""),
-        rapidapi_key=os.environ.get("RAPIDAPI_KEY", ""),
-        notion_api_key=os.environ.get("NOTION_API_KEY", ""),
-        notion_database_id=os.environ.get("NOTION_DATABASE_ID", ""),
+        adzuna_app_id=os.environ.get("ADZUNA_APP_ID", "").strip(),
+        adzuna_app_key=os.environ.get("ADZUNA_APP_KEY", "").strip(),
+        rapidapi_key=os.environ.get("RAPIDAPI_KEY", "").strip(),
+        # Strip whitespace/quotes — a stray newline or wrapping quote in the env
+        # file makes Notion reject the Bearer token with 401.
+        notion_api_key=os.environ.get("NOTION_API_KEY", "").strip().strip('"\''),
+        notion_database_id=os.environ.get("NOTION_DATABASE_ID", "").strip().strip('"\''),
     )
