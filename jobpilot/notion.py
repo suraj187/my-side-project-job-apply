@@ -106,17 +106,23 @@ def _create_notion_job(
     if job.reason:
         additional_info += f" · {job.reason}"
 
+    props = {
+        "Company": {"title": [{"text": {"content": job.company or "Unknown"}}]},
+        "Role": {"rich_text": [{"text": {"content": job.title or ""}}]},
+        "Additional information": {
+            "rich_text": [{"text": {"content": additional_info[:2000]}}]
+        },
+    }
+    # Link must be a non-empty string or omitted entirely — Notion rejects null.
+    if job.url:
+        props["Link"] = {"url": job.url}
+    # Only set Status if "New" exists as a select option in the database.
+    # If it doesn't exist Notion returns 400; we skip it and let the default apply.
+    props["Status"] = {"select": {"name": "New"}}
+
     payload = {
         "parent": {"database_id": notion_database_id},
-        "properties": {
-            "Company": {"title": [{"text": {"content": job.company or "Unknown"}}]},
-            "Role": {"rich_text": [{"text": {"content": job.title or ""}}]},
-            "Link": {"url": job.url or None},
-            "Status": {"select": {"name": "New"}},
-            "Additional information": {
-                "rich_text": [{"text": {"content": additional_info}}]
-            },
-        },
+        "properties": props,
     }
 
     try:
