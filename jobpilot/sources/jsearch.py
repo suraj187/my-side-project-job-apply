@@ -29,6 +29,10 @@ _JUNK_EMPLOYER_PATTERNS = (
     "render.com",
 )
 
+# Boards that should land in Tier 1. If a job is mirrored to one of these via
+# apply_options, prefer that publisher so it gets prioritized.
+_TIER1_PUBLISHERS = ("linkedin", "indeed", "ziprecruiter")
+
 
 class JSearchSource(Source):
     name = "jsearch"
@@ -67,12 +71,20 @@ class JSearchSource(Source):
             "employment_type": "FULLTIME",
         }
 
-        try:
-            resp = requests.get(_URL, params=params, headers=headers, timeout=20)
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as exc:
-            log.warning("jsearch: failed to fetch query '%s' (%s)", query, exc)
+        data = None
+        for attempt in (1, 2):
+            try:
+                resp = requests.get(_URL, params=params, headers=headers, timeout=30)
+                resp.raise_for_status()
+                data = resp.json()
+                break
+            except requests.exceptions.Timeout:
+                log.warning("jsearch: timeout on '%s' (attempt %d/2)", query, attempt)
+                continue
+            except Exception as exc:
+                log.warning("jsearch: failed to fetch query '%s' (%s)", query, exc)
+                return []
+        if data is None:
             return []
 
         jobs = []
@@ -95,9 +107,22 @@ class JSearchSource(Source):
                 comp=self._extract_salary(j),
                 posted_at=j.get("job_posted_publish_date", ""),
                 external_id=j.get("job_id", ""),
+                publisher=self._publisher(j),
                 raw=j,
             ))
         return jobs
+
+    def _publisher(self, job: dict[str, Any]) -> str:
+        """Which board this came from. Prefer a Tier-1 board (LinkedIn/Indeed/
+        ZipRecruiter) if the job is mirrored to one via apply_options, else fall
+        back to the primary job_publisher."""
+        primary = job.get("job_publisher", "") or ""
+        options = job.get("apply_options") or []
+        for opt in options:
+            pub = (opt.get("publisher", "") or "")
+            if any(t in pub.lower() for t in _TIER1_PUBLISHERS):
+                return pub
+        return primary
 
     def _location(self, job: dict[str, Any]) -> str:
         """Build a readable location from JSearch's structured fields."""

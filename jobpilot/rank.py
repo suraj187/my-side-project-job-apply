@@ -11,9 +11,41 @@ import logging
 import re
 
 from .config import Criteria
+from .filters import detect_staffing
 from .models import Job
 
 log = logging.getLogger("jobpilot.rank")
+
+
+def _annotate(job: Job, criteria: Criteria) -> None:
+    """Flag + demote quality concerns (never drop). Also assign source tier.
+
+    Tier 1 = LinkedIn / Indeed / ZipRecruiter (publisher in tier1_publishers).
+    Tier 2 = everything else. Sort is (tier, -score), so Tier 1 always leads.
+    """
+    flags = list(job.flags)
+
+    # Remote not confirmed → flag + penalize (user is remote-first).
+    if job.workplace not in ("remote", "hybrid") and job.remote is not True:
+        flags.append("remote unconfirmed")
+        job.score = max(0, job.score - getattr(criteria, "remote_penalty", 15))
+
+    # Staffing / consulting body-shop → flag + penalize.
+    is_staffing, why = detect_staffing(
+        job,
+        criteria.consulting_firm_keywords,
+        getattr(criteria, "staffing_signals", []),
+    )
+    if is_staffing:
+        flags.append("staffing")
+        job.score = max(0, job.score - getattr(criteria, "staffing_penalty", 20))
+        log.debug("staffing flag for %s @ %s (%s)", job.title, job.company, why)
+
+    job.flags = flags
+
+    tier1 = {p.lower() for p in getattr(criteria, "tier1_publishers", [])}
+    pub = (job.publisher or "").lower()
+    job.tier = 1 if any(t in pub for t in tier1) else 2
 
 
 def _tokens(text: str) -> set[str]:
@@ -122,8 +154,15 @@ def llm_score(jobs: list[Job], criteria: Criteria) -> None:
 def rank(jobs: list[Job], criteria: Criteria) -> list[Job]:
     for job in jobs:
         job.score, job.reason = rule_score(job, criteria)
-    jobs.sort(key=lambda j: j.score, reverse=True)
+    # Apply the quality floor on the BASE score, before demotion penalties, so a
+    # flagged job (staffing / remote-unconfirmed) is demoted but never dropped by
+    # the floor. (require_sailpoint in filters.py is the real gate now.)
+    kept = [j for j in jobs if j.score >= criteria.min_score]
+    for job in kept:
+        _annotate(job, criteria)
     if criteria.llm.enabled:
-        llm_score(jobs, criteria)
-        jobs.sort(key=lambda j: j.score, reverse=True)
-    return jobs
+        kept.sort(key=lambda j: (j.tier, -j.score))
+        llm_score(kept, criteria)
+    # Tier 1 (LinkedIn/Indeed/ZipRecruiter) first, then by score within each tier.
+    kept.sort(key=lambda j: (j.tier, -j.score))
+    return kept

@@ -55,6 +55,7 @@ class AdzunaSource(Source):
                     comp=comp,
                     posted_at=j.get("created", ""),
                     external_id=str(j.get("id", "")),
+                    publisher="Adzuna",
                     raw=j,
                 ))
         return jobs

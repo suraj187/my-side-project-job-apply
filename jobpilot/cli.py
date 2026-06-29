@@ -71,9 +71,10 @@ def _cmd_weekly(args) -> None:
             comp=row["comp"],
             posted_at=row["posted_at"],
             external_id=row["external_id"],
+            publisher=dict(row).get("publisher", "") or "",
             score=row["score"],
             reason=row["reason"],
-            flags=[],
+            flags=(row["flags"].split(",") if dict(row).get("flags") else []),
         ) for row in rows]
 
         print(f"Weekly digest: {len(jobs)} jobs from past 7 days")

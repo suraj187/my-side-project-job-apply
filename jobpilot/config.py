@@ -16,6 +16,20 @@ class LLMConfig:
     shortlist_size: int = 25       # only this many top jobs hit the API per run
 
 
+_DEFAULT_SAILPOINT_MARKERS = [
+    "sailpoint", "identityiq", "identity iq", "iiq", "identitynow",
+    "identity now", "identity security cloud", "sailpoint isc",
+]
+
+_DEFAULT_STAFFING_SIGNALS = [
+    "c2c", "corp to corp", "corp-to-corp", "our client", "w2 only", "1099",
+    "multiple positions", "multiple openings", "submit your resume",
+    "contract position", "per hour", "rate:", "staffing", "staff augmentation",
+]
+
+_DEFAULT_TIER1_PUBLISHERS = ["linkedin", "indeed", "ziprecruiter"]
+
+
 @dataclass
 class Criteria:
     titles: list[str] = field(default_factory=list)
@@ -30,6 +44,16 @@ class Criteria:
     remotive_queries: list[str] = field(default_factory=list)
     jsearch_queries: list[str] = field(default_factory=list)
     consulting_firm_keywords: list[str] = field(default_factory=list)
+    # SailPoint-only gate + quality flagging (see filters.py / rank.py).
+    require_sailpoint: bool = True
+    sailpoint_markers: list[str] = field(
+        default_factory=lambda: list(_DEFAULT_SAILPOINT_MARKERS))
+    staffing_signals: list[str] = field(
+        default_factory=lambda: list(_DEFAULT_STAFFING_SIGNALS))
+    tier1_publishers: list[str] = field(
+        default_factory=lambda: list(_DEFAULT_TIER1_PUBLISHERS))
+    remote_penalty: int = 15       # score hit when remote isn't confirmed
+    staffing_penalty: int = 20     # score hit for staffing/consulting firms
     llm: LLMConfig = field(default_factory=LLMConfig)
 
 

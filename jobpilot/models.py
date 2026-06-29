@@ -28,12 +28,14 @@ class Job:
     comp: str = ""                   # free-text comp if the source provides it
     posted_at: str = ""              # ISO-ish string if available
     external_id: str = ""
+    publisher: str = ""              # board it came from: "LinkedIn", "Indeed", ...
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
     # Filled in later by the pipeline:
     score: int = 0
     reason: str = ""
     flags: list[str] = field(default_factory=list)
+    tier: int = 2                    # 1 = LinkedIn/Indeed/ZipRecruiter, 2 = other
 
     @property
     def dedup_key(self) -> str:

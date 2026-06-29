@@ -14,6 +14,8 @@ from email.message import EmailMessage
 
 log = logging.getLogger("jobpilot.notify")
 
+_EMDASH = "—"  # kept as a constant so f-strings stay py3.11-compatible
+
 
 def desktop(title: str, body: str) -> bool:
     try:
@@ -82,6 +84,40 @@ def _score_color(score: int) -> str:
     return "#57606a"
 
 
+# Boards that lead the digest (Tier 1). Kept here as a display concern so the
+# weekly digest (which loads jobs from the DB) tiers identically to a live run.
+_TIER1_PUBLISHERS = ("linkedin", "indeed", "ziprecruiter")
+_TIER_LABELS = {
+    1: "Tier 1 · LinkedIn / Indeed / ZipRecruiter",
+    2: "Tier 2 · Other job boards",
+}
+
+
+def _tier_of(job) -> int:
+    pub = (getattr(job, "publisher", "") or "").lower()
+    return 1 if any(t in pub for t in _TIER1_PUBLISHERS) else 2
+
+
+def _group_by_tier(jobs):
+    """Return [(tier, [jobs])] with Tier 1 first, jobs already score-sorted."""
+    buckets: dict[int, list] = {1: [], 2: []}
+    for j in jobs:
+        buckets[_tier_of(j)].append(j)
+    return [(t, buckets[t]) for t in (1, 2) if buckets[t]]
+
+
+def _flag_badges_html(flags) -> str:
+    if not flags:
+        return ""
+    spans = "".join(
+        '<span style="display:inline-block;background:#fff8c5;color:#7d4e00;'
+        'border:1px solid #eac54f;border-radius:20px;padding:1px 8px;'
+        f'font-size:11px;font-weight:600;margin-right:6px;">⚑ {html.escape(f)}</span>'
+        for f in flags
+    )
+    return f'<div style="margin-top:8px;">{spans}</div>'
+
+
 def _timeframe(dt) -> str:
     """e.g. 'Jun 22, 2026 (Morning)' — date plus which daily run slot."""
     h = dt.hour
@@ -100,54 +136,72 @@ def _link_html(statuses, url) -> str:
             f'⚠ Link unverified ({html.escape(note)}) — may be expired</div>')
 
 
+def _job_card_html(j, statuses) -> str:
+    color = _score_color(j.score)
+    comp_html = (f'<div style="color:#1a7f37;font-size:13px;font-weight:600;margin-top:6px;">\U0001f4b0 {html.escape(j.comp)}</div>'
+                 if j.comp else '')
+    board = (getattr(j, "publisher", "") or j.source or "").strip()
+    board_html = f' &nbsp;\u00b7&nbsp; \U0001f4e2 {html.escape(board)}' if board else ''
+    return (
+        '<div style="border:1px solid #d0d7de;border-radius:10px;padding:14px 16px;margin:0 0 14px;">'
+        '<table style="width:100%;border-collapse:collapse;"><tr>'
+        f'<td style="vertical-align:top;padding:0;"><a href="{html.escape(j.url)}" style="font-size:16px;font-weight:600;color:#0969da;text-decoration:none;">{html.escape(j.title)}</a>'
+        f'<div style="color:#57606a;font-size:13px;margin-top:4px;">{html.escape(j.company or _EMDASH)} \u00b7 {html.escape(j.location or "Location n/a")} \u00b7 {html.escape(j.workplace or "workplace n/a")}</div></td>'
+        f'<td style="vertical-align:top;text-align:right;padding:0;white-space:nowrap;"><span style="display:inline-block;background:{color};color:#ffffff;border-radius:20px;padding:3px 11px;font-size:13px;font-weight:700;">{j.score}</span></td>'
+        '</tr></table>'
+        f'{_flag_badges_html(j.flags)}'
+        f'{comp_html}'
+        f'<div style="color:#57606a;font-size:13px;margin-top:6px;">\U0001f552 Posted: {html.escape(_fmt_posted(j.posted_at))}</div>'
+        f'<div style="color:#57606a;font-size:13px;margin-top:2px;">\U0001f4cb {html.escape(j.source)}{board_html} &nbsp;\u00b7&nbsp; \u2705 {html.escape(_humanize_reason(j.reason))}</div>'
+        f'{_link_html(statuses, j.url)}'
+        f'<div style="font-size:13px;line-height:1.55;margin-top:10px;">{html.escape(_snippet(j.description, 500))}</div>'
+        f'<div style="margin-top:12px;"><a href="{html.escape(j.url)}" style="display:inline-block;background:#1f883d;color:#ffffff;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;">Apply / View posting \u2192</a></div>'
+        '</div>'
+    )
+
+
 def _html(jobs, run_dt, statuses=None) -> str:
     n = len(jobs)
     parts = [
         '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:680px;margin:0 auto;padding:8px;color:#1f2328;">',
-        f'<h1 style="font-size:20px;margin:0 0 2px;">JobPilot \u2014 {n} new IAM role{"s" if n != 1 else ""}</h1>',
+        f'<h1 style="font-size:20px;margin:0 0 2px;">JobPilot \u2014 {n} SailPoint IAM role{"s" if n != 1 else ""}</h1>',
         f'<p style="color:#57606a;font-size:13px;margin:0 0 18px;">Run: {run_dt.strftime("%A, %B %d, %Y \u00b7 %I:%M %p")}</p>',
     ]
-    for j in jobs:
-        color = _score_color(j.score)
-        comp_html = (f'<div style="color:#1a7f37;font-size:13px;font-weight:600;margin-top:6px;">\U0001f4b0 {html.escape(j.comp)}</div>'
-                     if j.comp else '')
+    for tier, group in _group_by_tier(jobs):
         parts.append(
-            '<div style="border:1px solid #d0d7de;border-radius:10px;padding:14px 16px;margin:0 0 14px;">'
-            '<table style="width:100%;border-collapse:collapse;"><tr>'
-            f'<td style="vertical-align:top;padding:0;"><a href="{html.escape(j.url)}" style="font-size:16px;font-weight:600;color:#0969da;text-decoration:none;">{html.escape(j.title)}</a>'
-            f'<div style="color:#57606a;font-size:13px;margin-top:4px;">{html.escape(j.company or "\u2014")} \u00b7 {html.escape(j.location or "Location n/a")} \u00b7 {html.escape(j.workplace or "workplace n/a")}</div></td>'
-            f'<td style="vertical-align:top;text-align:right;padding:0;white-space:nowrap;"><span style="display:inline-block;background:{color};color:#ffffff;border-radius:20px;padding:3px 11px;font-size:13px;font-weight:700;">{j.score}</span></td>'
-            '</tr></table>'
-            f'{comp_html}'
-            f'<div style="color:#57606a;font-size:13px;margin-top:6px;">\U0001f552 Posted: {html.escape(_fmt_posted(j.posted_at))}</div>'
-            f'<div style="color:#57606a;font-size:13px;margin-top:2px;">\U0001f4cb {html.escape(j.source)} &nbsp;\u00b7&nbsp; \u2705 {html.escape(_humanize_reason(j.reason))}</div>'
-            f'{_link_html(statuses, j.url)}'
-            f'<div style="font-size:13px;line-height:1.55;margin-top:10px;">{html.escape(_snippet(j.description, 500))}</div>'
-            f'<div style="margin-top:12px;"><a href="{html.escape(j.url)}" style="display:inline-block;background:#1f883d;color:#ffffff;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;">Apply / View posting \u2192</a></div>'
-            '</div>'
+            f'<h2 style="font-size:14px;color:#1f2328;border-bottom:2px solid #d0d7de;'
+            f'padding-bottom:4px;margin:22px 0 14px;">{html.escape(_TIER_LABELS[tier])} '
+            f'<span style="color:#57606a;font-weight:400;">({len(group)})</span></h2>'
         )
+        for j in group:
+            parts.append(_job_card_html(j, statuses))
     parts.append('</div>')
     return "".join(parts)
 
 
 def _text(jobs, run_dt, statuses=None) -> str:
-    lines = [f"JobPilot \u2014 {len(jobs)} new IAM roles",
+    lines = [f"JobPilot \u2014 {len(jobs)} SailPoint IAM roles",
              run_dt.strftime("Run: %A, %B %d, %Y \u00b7 %I:%M %p"), ""]
-    for j in jobs:
-        lines.append(f"[{j.score}] {j.title} \u2014 {j.company}")
-        lines.append(f"  {j.location or 'Location n/a'} \u00b7 {j.workplace or 'workplace n/a'}")
-        if j.comp:
-            lines.append(f"  Salary: {j.comp}")
-        lines.append(f"  Posted: {_fmt_posted(j.posted_at)}")
-        lines.append(f"  Source: {j.source} \u00b7 Why: {_humanize_reason(j.reason)}")
-        if statuses is not None:
-            ok, note = statuses.get(j.url, (False, "unverified"))
-            lines.append(f"  Link: {'verified' if ok else f'unverified ({note}) - may be expired'}")
-        snip = _snippet(j.description, 300)
-        if snip:
-            lines.append(f"  {snip}")
-        lines.append(f"  Apply: {j.url}")
+    for tier, group in _group_by_tier(jobs):
+        lines.append(f"== {_TIER_LABELS[tier]} ({len(group)}) ==")
         lines.append("")
+        for j in group:
+            flag_str = f"  [{', '.join(j.flags)}]" if j.flags else ""
+            lines.append(f"[{j.score}] {j.title} \u2014 {j.company}{flag_str}")
+            board = (getattr(j, "publisher", "") or j.source or "")
+            lines.append(f"  {j.location or 'Location n/a'} \u00b7 {j.workplace or 'workplace n/a'} \u00b7 {board}")
+            if j.comp:
+                lines.append(f"  Salary: {j.comp}")
+            lines.append(f"  Posted: {_fmt_posted(j.posted_at)}")
+            lines.append(f"  Source: {j.source} \u00b7 Why: {_humanize_reason(j.reason)}")
+            if statuses is not None:
+                ok, note = statuses.get(j.url, (False, "unverified"))
+                lines.append(f"  Link: {'verified' if ok else f'unverified ({note}) - may be expired'}")
+            snip = _snippet(j.description, 300)
+            if snip:
+                lines.append(f"  {snip}")
+            lines.append(f"  Apply: {j.url}")
+            lines.append("")
     return "\n".join(lines)
 
 

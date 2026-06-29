@@ -84,9 +84,9 @@ def run(settings: Settings, db_path: str, digest_dir: str = ".",
         else:
             log.debug("drop %s @ %s: %s", job.title, job.company, why)
 
-    # 4. Rank (rule-based, plus optional LLM on the shortlist)
+    # 4. Rank (rule-based, plus optional LLM on the shortlist).
+    # rank() applies the min_score floor (on base score) and the 2-tier sort.
     kept = rank(kept, settings.criteria)
-    kept = [j for j in kept if j.score >= settings.criteria.min_score]
 
     # 5. Store + detect what's new
     db = DB(db_path)

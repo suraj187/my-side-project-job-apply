@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     comp           TEXT,
     posted_at      TEXT,
     external_id    TEXT,
+    publisher      TEXT,
     score          INTEGER,
     reason         TEXT,
     flags          TEXT,
@@ -29,6 +30,13 @@ CREATE TABLE IF NOT EXISTS jobs (
     notion_row_id  TEXT
 );
 """
+
+# Columns added after the first release. _migrate() adds any that an existing
+# database is missing, so upgrading never requires a manual ALTER or a rebuild.
+_LATER_COLUMNS = {
+    "publisher": "TEXT",
+    "notion_row_id": "TEXT",
+}
 
 
 def _now() -> str:
@@ -40,7 +48,15 @@ class DB:
         self.conn = sqlite3.connect(path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(_SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Add any columns missing from an older database (idempotent)."""
+        have = {r["name"] for r in self.conn.execute("PRAGMA table_info(jobs)")}
+        for col, coltype in _LATER_COLUMNS.items():
+            if col not in have:
+                self.conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {coltype}")
 
     def is_known(self, dedup_key: str) -> bool:
         cur = self.conn.execute("SELECT 1 FROM jobs WHERE dedup_key = ?", (dedup_key,))
@@ -60,12 +76,13 @@ class DB:
         self.conn.execute(
             """INSERT INTO jobs
                (dedup_key, source, title, company, url, location, workplace, comp,
-                posted_at, external_id, score, reason, flags, status, first_seen, last_seen)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                posted_at, external_id, publisher, score, reason, flags, status,
+                first_seen, last_seen)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (row["dedup_key"], row["source"], row["title"], row["company"], row["url"],
              row["location"], row["workplace"], row["comp"], row["posted_at"],
-             row["external_id"], row["score"], row["reason"], row["flags"],
-             "new", now, now),
+             row["external_id"], row.get("publisher", ""), row["score"], row["reason"],
+             row["flags"], "new", now, now),
         )
         self.conn.commit()
         return True

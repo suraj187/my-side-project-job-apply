@@ -46,31 +46,71 @@ def detect_workplace(job: Job) -> str:
     return ""
 
 
+def is_sailpoint(job: Job, markers) -> bool:
+    """True if the role's primary tool is SailPoint (IIQ or ISC).
+
+    Title may say "IAM Engineer/Developer" — what matters is that a SailPoint
+    product marker appears in the title or description.
+    """
+    blob = " ".join([_norm(job.title), _norm(job.description)])
+    return any(m and m.lower() in blob for m in markers)
+
+
+def detect_staffing(job: Job, firm_keywords, signals) -> tuple[bool, str]:
+    """Detect staffing/consulting body-shops by firm name or staffing language.
+
+    Returns (is_staffing, why). Used to flag + demote (not drop) per user choice.
+    """
+    company = _norm(job.company)
+    for firm in firm_keywords or []:
+        if firm and firm.lower() in company:
+            return True, f"firm: {firm}"
+    blob = " ".join([_norm(job.title), _norm(job.description[:1500])])
+    for sig in signals or []:
+        if sig and sig.lower() in blob:
+            return True, f"signal: {sig}"
+    return False, ""
+
+
 def is_us(job: Job) -> bool:
     """True if the posting looks US-eligible (incl. worldwide-remote)."""
-    blob = " ".join([_norm(job.location), _norm(job.description[:600])])
+    loc = _norm(job.location)
+    blob = " ".join([loc, _norm(job.description[:600])])
     if any(m in blob for m in _US_MARKERS):
         return True
     if any(m in blob for m in _GLOBAL_MARKERS):
         return True  # worldwide remote includes the US
+    # A bare "us"/"usa" token in the *location* field (e.g. "Remote - US", "US")
+    # almost always means United States. Aggregators (JSearch) often report
+    # remote US roles this way, so don't drop them as "not US-eligible".
+    if set(re.split(r"[^a-z]+", loc)) & {"us", "usa"}:
+        return True
     tokens = set(re.split(r"[^a-z]+", blob))
     if tokens & _US_STATES:
         return True
     # Abbreviations are noisy; only trust them next to a comma/paren or "remote".
-    if re.search(r"\b(" + "|".join(_US_STATE_ABBR) + r")\b", _norm(job.location)):
+    if re.search(r"\b(" + "|".join(_US_STATE_ABBR) + r")\b", loc):
         return True
     return False
 
 
 def passes_hard_filters(job: Job, criteria) -> tuple[bool, str]:
-    """Apply dealbreakers. Returns (kept, reason_if_dropped)."""
-    wp = detect_workplace(job)
-    job.workplace = wp or job.workplace
+    """Apply true dealbreakers (drop). Returns (kept, reason_if_dropped).
 
-    if criteria.remote_only and wp == "onsite":
-        return False, "onsite (remote_only)"
-    if criteria.remote_only and wp == "hybrid" and not criteria.allow_hybrid:
-        return False, "hybrid (remote_only, hybrid off)"
+    Remote and staffing are NOT dealbreakers anymore — they're flagged + demoted
+    in rank.py so the user still sees them. The hard drops here are:
+      - not SailPoint-related (the primary tool must be SailPoint), if enabled
+      - not US-eligible (work authorization), if us_only
+      - dealbreaker keywords / explicitly excluded companies
+    """
+    # Resolve workplace early so rank.py can flag remote-unconfirmed jobs.
+    job.workplace = detect_workplace(job) or job.workplace
+
+    if getattr(criteria, "require_sailpoint", False):
+        markers = getattr(criteria, "sailpoint_markers", []) or []
+        if markers and not is_sailpoint(job, markers):
+            return False, "not SailPoint"
+
     if criteria.us_only and not is_us(job):
         return False, "not US-eligible"
 
@@ -82,10 +122,5 @@ def passes_hard_filters(job: Job, criteria) -> tuple[bool, str]:
     if criteria.exclude_companies:
         if _norm(job.company) in {c.lower() for c in criteria.exclude_companies}:
             return False, "excluded company"
-
-    if criteria.consulting_firm_keywords:
-        for firm in criteria.consulting_firm_keywords:
-            if firm and firm.lower() in blob:
-                return False, f"consulting firm: {firm}"
 
     return True, ""

@@ -45,6 +45,7 @@ class RemotiveSource(Source):
                     comp=j.get("salary", "") or "",
                     posted_at=j.get("publication_date", ""),
                     external_id=str(j.get("id", "")),
+                    publisher="Remotive",
                     raw=j,
                 ))
         return jobs

@@ -23,15 +23,72 @@ dealbreaker_keywords:
 
 exclude_companies: []
 
-# Consulting firms to filter out (they often disguise direct-hire as contracting).
-# Common: TEKsystems, Cognizant, Infosys, Accenture, Deloitte, Wipro, TCS, etc.
-consulting_firm_keywords: []
+# Staffing / consulting firms. These are NO LONGER dropped — they're flagged
+# "⚑ staffing" in the email and demoted (staffing_penalty) so they sink to the
+# bottom but you still see them.
+consulting_firm_keywords:
+  - apex systems
+  - siri info
+  - danta
+  - knowledge management
+  - concept plus
+  - teksystems
+  - cognizant
+  - infosys
+  - accenture
+  - deloitte
+  - wipro
+  - tcs
+  - hcl
+  - capgemini
+  - insight global
+  - robert half
 
 # Filters (your stated priorities).
 remote_only: true
 allow_hybrid: false      # flip to true later to allow hybrid
 us_only: true
 min_score: 40            # don't surface anything below this
+
+# --- SailPoint-only gate + quality flagging ---
+# require_sailpoint: drop anything whose primary tool isn't SailPoint. A title of
+# "IAM Engineer" is fine as long as a SailPoint marker appears in the posting.
+require_sailpoint: true
+sailpoint_markers:
+  - sailpoint
+  - identityiq
+  - identity iq
+  - iiq
+  - identitynow
+  - identity now
+  - identity security cloud
+  - sailpoint isc
+
+# Staffing language detected in the description → flag + demote (not drop).
+staffing_signals:
+  - c2c
+  - corp to corp
+  - corp-to-corp
+  - our client
+  - w2 only
+  - "1099"
+  - multiple positions
+  - multiple openings
+  - submit your resume
+  - contract position
+  - per hour
+  - "rate:"
+  - staff augmentation
+
+# Boards that lead the digest (Tier 1). Everything else is Tier 2.
+tier1_publishers:
+  - linkedin
+  - indeed
+  - ziprecruiter
+
+# Score penalties for demotion (jobs are flagged, never dropped, by these).
+remote_penalty: 15       # applied when a posting isn't clearly remote
+staffing_penalty: 20     # applied to staffing / consulting firms
 
 # Queries sent to the broad job boards (only used if those sources are on).
 adzuna_queries:
