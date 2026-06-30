@@ -97,11 +97,11 @@ def is_us(job: Job) -> bool:
 def passes_hard_filters(job: Job, criteria) -> tuple[bool, str]:
     """Apply true dealbreakers (drop). Returns (kept, reason_if_dropped).
 
-    Remote and staffing are NOT dealbreakers anymore — they're flagged + demoted
-    in rank.py so the user still sees them. The hard drops here are:
-      - not SailPoint-related (the primary tool must be SailPoint), if enabled
+    Hard drops:
+      - not SailPoint-related (primary tool must be SailPoint), if enabled
       - not US-eligible (work authorization), if us_only
       - dealbreaker keywords / explicitly excluded companies
+      - staffing/consulting firms (firm name or staffing language in description)
     """
     # Resolve workplace early so rank.py can flag remote-unconfirmed jobs.
     job.workplace = detect_workplace(job) or job.workplace
@@ -122,5 +122,14 @@ def passes_hard_filters(job: Job, criteria) -> tuple[bool, str]:
     if criteria.exclude_companies:
         if _norm(job.company) in {c.lower() for c in criteria.exclude_companies}:
             return False, "excluded company"
+
+    # Hard-drop staffing/consulting firms — no longer flag-and-demote.
+    is_staffing, why = detect_staffing(
+        job,
+        criteria.consulting_firm_keywords,
+        getattr(criteria, "staffing_signals", []),
+    )
+    if is_staffing:
+        return False, f"staffing/consulting: {why}"
 
     return True, ""
