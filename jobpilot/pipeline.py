@@ -96,8 +96,10 @@ def run(settings: Settings, db_path: str, digest_dir: str = ".",
             if db.upsert(job):
                 new_jobs.append(job)
 
-        # 5b. Sync new jobs to Notion (optional)
-        if settings.notion_api_key and settings.notion_database_id:
+        # 5b. Sync new jobs to Notion (optional — disabled unless NOTION_SYNC=true)
+        import os
+        if (settings.notion_api_key and settings.notion_database_id
+                and os.environ.get("NOTION_SYNC", "").lower() == "true"):
             try:
                 from .notion import sync_jobs_to_notion
                 job_id_map = db.get_notion_id_map()
